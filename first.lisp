@@ -295,3 +295,307 @@
 (cubic-root 27)
 ;=> 3.0012743
 
+;;; 1.1.8 ブラックボックス抽象としての手続き
+(defun square (x) (* x x))
+;=> SQUARE
+(defun square (x) (exp (double (log x))))
+;=> SQUARE
+(defun double (x) (+ x x))
+;=> DOUBLE
+
+(defun square (x) (* x x))
+;=> SQUARE
+(defun square (y) (* y y))
+;=> SQUARE
+(defun good-enough? (guess x)
+  (< (abs (- (square guess) x)) 0.001))
+;=> GOOD-ENOUGH?
+
+(defun |sqrt| (x)
+  (sqrt-iter 1.0 x))
+;=> |sqrt|
+(defun sqrt-iter (guess x)
+  (if (good-enough? guess x)
+      guess
+      (sqrt-iter (improve guess x) x)))
+;=> SQRT-ITER
+(defun good-enough? (guess x)
+  (< (abs (- (square guess) x)) 0.001))
+;=> GOOD-ENOUGH?
+(defun improve (guess x)
+  (average guess (/ x guess)))
+;=> IMPROVE
+
+(defun |sqrt| (x)
+  (labels ((good-enough? (guess x)
+             (< (abs (- (square guess) x)) 0.001))
+           (improve (guess x)
+             (average guess (/ x guess)))
+           (sqrt-iter (guess x)
+             (if (good-enough? guess x)
+                 guess
+                 (sqrt-iter (improve guess x) x)))
+           (average (x y)
+             (/ (+ x y) 2)))
+    (sqrt-iter 1.0 x)))
+;=> |sqrt|
+(|sqrt| 2)
+;=> 1.4142157
+
+(defun |sqrt| (x)
+  (labels ((good-enough? (guess)
+             (< (abs (- (square guess) x)) 0.001))
+           (improve (guess)
+             (average guess (/ x guess)))
+           (sqrt-iter (guess)
+             (if (good-enough? guess)
+                 guess
+                 (sqrt-iter (improve guess))))
+           (average (x y)
+             (/ (+ x y) 2)))
+    (sqrt-iter 1.0)))
+;=> |sqrt|
+(|sqrt| 2)
+;=> 1.4142157
+
+;;; 1.2 手続きとその生成するプロセス
+;;; 線形再帰と反復
+(defun factorial (n)
+  (if (= n 1)
+      1
+      (* n (factorial (- n 1)))))
+;=> FACTORIAL
+(factorial 6)
+;=> 720
+(trace factorial)
+;=> (FACTORIAL)
+(factorial 6)
+;;   0: (FACTORIAL 6)
+;;     1: (FACTORIAL 5)
+;;       2: (FACTORIAL 4)
+;;         3: (FACTORIAL 3)
+;;           4: (FACTORIAL 2)
+;;             5: (FACTORIAL 1)
+;;             5: FACTORIAL returned 1
+;;           4: FACTORIAL returned 2
+;;         3: FACTORIAL returned 6
+;;       2: FACTORIAL returned 24
+;;     1: FACTORIAL returned 120
+;;   0: FACTORIAL returned 720
+;=> 720
+(untrace)
+;=> T
+
+(defun factorial (n)
+  (fact-iter 1 1 n))
+;=> FACTORIAL
+(defun fact-iter (product counter max-count)
+  (if (> counter max-count)
+      product
+      (fact-iter (* counter product)
+                 (+ counter 1)
+                 max-count)))
+;=> FACT-ITER
+(factorial 6)
+;=> 720
+(trace fact-iter)
+;=> (FACT-ITER)
+;; (factorial 6)
+;;   0: (FACTORIAL 6)
+;;     1: (FACT-ITER 1 1 6)
+;;       2: (FACT-ITER 1 2 6)
+;;         3: (FACT-ITER 2 3 6)
+;;           4: (FACT-ITER 6 4 6)
+;;             5: (FACT-ITER 24 5 6)
+;;               6: (FACT-ITER 120 6 6)
+;;                 7: (FACT-ITER 720 7 6)
+;;                 7: FACT-ITER returned 720
+;;               6: FACT-ITER returned 720
+;;             5: FACT-ITER returned 720
+;;           4: FACT-ITER returned 720
+;;         3: FACT-ITER returned 720
+;;       2: FACT-ITER returned 720
+;;     1: FACT-ITER returned 720
+;;   0: FACTORIAL returned 720
+;=> 720
+(untrace)
+;=> T
+
+;;; 問題1.9
+; 前者が線形再帰的で後者が線形反復的。
+; 後者が末尾再帰
+
+(defpackage :sicp)
+;=> #<PACKAGE "SICP">
+(defun sicp::+ (a b)
+  (if (= a 0)
+      b
+      (inc (sicp::+ (dec a) b))))
+;=> SICP::+
+(defun inc (x)
+  (+ x 1))
+;=> INC
+(defun dec (x)
+  (- x 1))
+;=> DEC
+(sicp::+ 4 5)
+;=> 9
+(trace sicp::+)
+;=> (SICP::+)
+;;   0: (SICP::+ 4 5)
+;;     1: (SICP::+ 3 5)
+;;       2: (SICP::+ 2 5)
+;;         3: (SICP::+ 1 5)
+;;           4: (SICP::+ 0 5)
+;;           4: SICP::+ returned 5
+;;         3: SICP::+ returned 6
+;;       2: SICP::+ returned 7
+;;     1: SICP::+ returned 8
+;;   0: SICP::+ returned 9
+;=> 9
+
+(defun sicp::+ (a b)
+  (if (= a 0)
+      b
+      (sicp::+ (dec a) (inc b))))
+;=> SICP::+
+(sicp::+ 4 5)
+;=> 9
+(trace sicp::+)
+;=> (SICP::+)
+(sicp::+ 4 5)
+;;   0: (SICP::+ 4 5)
+;;     1: (SICP::+ 3 6)
+;;       2: (SICP::+ 2 7)
+;;         3: (SICP::+ 1 8)
+;;           4: (SICP::+ 0 9)
+;;           4: SICP::+ returned 9
+;;         3: SICP::+ returned 9
+;;       2: SICP::+ returned 9
+;;     1: SICP::+ returned 9
+;;   0: SICP::+ returned 9
+;=> 9
+(untrace)
+;=> T
+
+;;; 問題1.10
+(defun A (x y)
+  (cond ((= y 0) 0)
+        ((= x 0) (* 2 y))
+        ((= y 1) 2)
+        (t (A (- x 1) 
+              (A x (- y 1))))))
+;=> A
+(A 1 10)
+;=> 1024
+(A 2 4)
+;=> 65536
+(A 3 3)
+;=> 65536
+(defun f (n)
+  (A 0 n))
+;=> F
+(defun g (n)
+  (A 1 n))
+;=> G
+(defun h (n)
+  (A 2 n))
+;=> H
+(defun k (n)
+  (* 5 n n))
+;=> K
+(trace A)
+;=> (A)
+
+(f 5)
+;=> 10
+(f 7)
+;=> 14
+; (f n) は「2*n」を計算する
+
+(g 5)
+;=> 32
+(g 3)
+;=> 8
+; (g n) は「2^n」を計算する
+
+(h 1)
+;=> 2
+(h 2)
+;=> 4
+(h 3)
+;=> 16
+(h 4)
+;=> 65536
+; (h n)は「2^(2^n)」を計算する
+
+;;; 1.2.2 木構造再帰
+(defun fib (n)
+  (cond ((= n 0) 0)
+        ((= n 1) 1)
+        (t (+ (fib (- n 1))
+              (fib (- n 2))))))
+;=> FIB
+(fib 4)
+;=> 3
+(fib 5)
+;=> 5
+(fib 6)
+;=> 8
+(fib 7)
+;=> 13
+(defun fib (n)
+  (fib-iter 1 0 n))
+;=> FIB
+(defun fib-iter (a b count)
+  (if (= count 0)
+      b
+      (fib-iter (+ a b) a (- count 1))))
+;=> FIB-ITER
+(fib 7)
+;=> 13
+
+;; 例: 両替の計算
+(defun count-change (amount)
+  (cc amount 5))
+;=> COUNT-CHANGE
+(defun cc (amount kinds-of-coins)
+  (cond ((= amount 0) 1)
+        ((or (< amount 0) (= kinds-of-coins 0)) 0)
+        (t (+ (cc amount
+                  (- kinds-of-coins 1))
+              (cc (- amount
+                     (first-denomination kinds-of-coins))
+                  kinds-of-coins)))))
+;=> CC
+(defun first-denomination (kinds-of-coins)
+  (cond ((= kinds-of-coins 1) 1)
+        ((= kinds-of-coins 2) 5)
+        ((= kinds-of-coins 3) 10)
+        ((= kinds-of-coins 4) 25)
+        ((= kinds-of-coins 5) 50)))
+;=> FIRST-DENOMINATION
+(count-change 100)
+;=> 292
+
+;;; 問題1.11
+(defun f (n)
+  (cond ((< n 3) n)
+        (t (+ (f (- n 1)) (* 2 (f (- n 2))) (* 3 (f (- n 3)))))))
+;=> F
+(f 5)
+;=> 25
+(defun f-iter (a b c count)
+  (cond ((= count 0) a)
+        ((= count 1) b)
+        ((= count 2) c)
+        (t
+         (f-iter b c (+ c (* 2 b) (* 3 a)) (- count 1)))))
+;=> F-ITER
+(defun f (n)
+  (f-iter 0 1 2 n))
+;=> F
+(f 5)
+;=> 25
+
+;;; 問題1.12
